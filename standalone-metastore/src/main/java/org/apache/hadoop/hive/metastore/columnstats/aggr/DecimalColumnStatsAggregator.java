@@ -40,6 +40,8 @@ import org.apache.hadoop.hive.metastore.utils.MetaStoreUtils.ColStatsObjWithSour
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.hadoop.hive.metastore.columnstats.ColumnsStatsUtils.decimalInspectorFromStats;
+
 public class DecimalColumnStatsAggregator extends ColumnStatsAggregator implements
     IExtrapolatePartStatus {
 
@@ -66,7 +68,7 @@ public class DecimalColumnStatsAggregator extends ColumnStatsAggregator implemen
             doAllPartitionContainStats);
       }
       DecimalColumnStatsDataInspector decimalColumnStatsData =
-          (DecimalColumnStatsDataInspector) cso.getStatsData().getDecimalStats();
+              decimalInspectorFromStats(cso);
       if (decimalColumnStatsData.getNdvEstimator() == null) {
         ndvEstimator = null;
         break;
@@ -99,7 +101,7 @@ public class DecimalColumnStatsAggregator extends ColumnStatsAggregator implemen
       for (ColStatsObjWithSourceInfo csp : colStatsWithSourceInfo) {
         ColumnStatisticsObj cso = csp.getColStatsObj();
         DecimalColumnStatsDataInspector newData =
-            (DecimalColumnStatsDataInspector) cso.getStatsData().getDecimalStats();
+                decimalInspectorFromStats(cso);
         lowerBound = Math.max(lowerBound, newData.getNumDVs());
         higherBound += newData.getNumDVs();
         densityAvgSum += (MetaStoreUtils.decimalToDouble(newData.getHighValue()) - MetaStoreUtils
@@ -188,7 +190,7 @@ public class DecimalColumnStatsAggregator extends ColumnStatsAggregator implemen
           ColumnStatisticsObj cso = csp.getColStatsObj();
           String partName = csp.getPartName();
           DecimalColumnStatsDataInspector newData =
-              (DecimalColumnStatsDataInspector) cso.getStatsData().getDecimalStats();
+                  decimalInspectorFromStats(cso);
           // newData.isSetBitVectors() should be true for sure because we
           // already checked it before.
           if (indexMap.get(partName) != curIndex) {

@@ -38,6 +38,8 @@ import org.apache.hadoop.hive.metastore.utils.MetaStoreUtils.ColStatsObjWithSour
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.hadoop.hive.metastore.columnstats.ColumnsStatsUtils.longInspectorFromStats;
+
 public class LongColumnStatsAggregator extends ColumnStatsAggregator implements
     IExtrapolatePartStatus {
 
@@ -64,7 +66,7 @@ public class LongColumnStatsAggregator extends ColumnStatsAggregator implements
             doAllPartitionContainStats);
       }
       LongColumnStatsDataInspector longColumnStatsData =
-          (LongColumnStatsDataInspector) cso.getStatsData().getLongStats();
+              longInspectorFromStats(cso);
       if (longColumnStatsData.getNdvEstimator() == null) {
         ndvEstimator = null;
         break;
@@ -97,7 +99,7 @@ public class LongColumnStatsAggregator extends ColumnStatsAggregator implements
       for (ColStatsObjWithSourceInfo csp : colStatsWithSourceInfo) {
         ColumnStatisticsObj cso = csp.getColStatsObj();
         LongColumnStatsDataInspector newData =
-            (LongColumnStatsDataInspector) cso.getStatsData().getLongStats();
+                longInspectorFromStats(cso);
         lowerBound = Math.max(lowerBound, newData.getNumDVs());
         higherBound += newData.getNumDVs();
         densityAvgSum += (newData.getHighValue() - newData.getLowValue()) / newData.getNumDVs();
@@ -175,7 +177,7 @@ public class LongColumnStatsAggregator extends ColumnStatsAggregator implements
           ColumnStatisticsObj cso = csp.getColStatsObj();
           String partName = csp.getPartName();
           LongColumnStatsDataInspector newData =
-              (LongColumnStatsDataInspector) cso.getStatsData().getLongStats();
+                  longInspectorFromStats(cso);
           // newData.isSetBitVectors() should be true for sure because we
           // already checked it before.
           if (indexMap.get(partName) != curIndex) {
