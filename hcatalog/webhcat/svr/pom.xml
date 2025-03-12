@@ -237,38 +237,17 @@
         <version>${maven.javadoc.plugin.version}</version>
         <executions>
           <execution>
-            <id>resourcesdoc.xml</id>
+            <id>generate-javadoc</id>
             <goals>
               <goal>javadoc</goal>
             </goals>
-            <phase>compile</phase>
+            <phase>prepare-package</phase>
             <configuration>
               <encoding>${project.build.sourceEncoding}</encoding>
-              <verbose>true</verbose>
+              <verbose>false</verbose>
               <show>public</show>
-              <doclet>com.sun.jersey.wadl.resourcedoc.ResourceDoclet</doclet>
-              <docletArtifacts>
-                <docletArtifact>
-                  <groupId>com.sun.jersey.contribs</groupId>
-                  <artifactId>wadl-resourcedoc-doclet</artifactId>
-                  <version>${wadl-resourcedoc-doclet.version}</version>
-                </docletArtifact>
-                <!--
-                    Also specify jersey and xerces as doclet artifacts as the ResourceDoclet
-                    uses classes provided by them to generate the resourcedoc.
-                 -->
-                <docletArtifact>
-                  <groupId>com.sun.jersey</groupId>
-                  <artifactId>jersey-server</artifactId>
-                  <version>${jersey.version}</version>
-                </docletArtifact>
-                <docletArtifact>
-                  <groupId>xerces</groupId>
-                  <artifactId>xercesImpl</artifactId>
-                  <version>${xerces.version}</version>
-                </docletArtifact>
-              </docletArtifacts>
-              <additionalparam>-output ${project.build.outputDirectory}/resourcedoc.xml</additionalparam>
+              <doclet>com.sun.jersey.wadl.resourcedoc.ResourceDoclet</doclet> <!-- 或替换为新的 doclet -->
+              <additionalparam>-output ${project.build.outputDirectory}/apidocs</additionalparam>
             </configuration>
           </execution>
         </executions>
