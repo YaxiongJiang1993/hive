@@ -14,18 +14,6 @@
 
 package org.apache.hadoop.hive.llap.daemon.impl;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URLClassLoader;
-import java.util.ArrayList;
-import java.util.IdentityHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
-
 import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -33,11 +21,10 @@ import org.apache.hadoop.hive.conf.HiveConf.ConfVars;
 import org.apache.hadoop.hive.metastore.api.Function;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.ResourceUri;
-import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
+import org.apache.hadoop.hive.ql.exec.AddToClassPathAction;
+import org.apache.hadoop.hive.ql.exec.FunctionInfo.FunctionResource;
 import org.apache.hadoop.hive.ql.exec.FunctionRegistry;
 import org.apache.hadoop.hive.ql.exec.FunctionTask;
-import org.apache.hadoop.hive.ql.exec.Utilities;
-import org.apache.hadoop.hive.ql.exec.FunctionInfo.FunctionResource;
 import org.apache.hadoop.hive.ql.metadata.Hive;
 import org.apache.hadoop.hive.ql.metadata.HiveException;
 import org.apache.hadoop.hive.ql.session.SessionState.ResourceType;
@@ -45,6 +32,21 @@ import org.apache.hadoop.hive.ql.udf.generic.GenericUDFBridge;
 import org.apache.hadoop.hive.ql.util.ResourceDownloader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URLClassLoader;
+import java.security.AccessController;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * This class localizes and manages jars for the functions allowed inside LLAP.
@@ -70,8 +72,9 @@ public class FunctionLocalizer implements GenericUDFBridge.UdfWhitelistChecker {
   public FunctionLocalizer(Configuration conf, String localDir) {
     this.conf = conf;
     this.localDir = new File(localDir, DIR_NAME);
-    this.executorClassloader = (URLClassLoader)Utilities.createUDFClassLoader(
-        (URLClassLoader)Thread.currentThread().getContextClassLoader(), new String[]{});
+    AddToClassPathAction addAction = new AddToClassPathAction(
+            Thread.currentThread().getContextClassLoader(), Collections.emptyList(), true);
+    this.executorClassloader = AccessController.doPrivileged(addAction);
     this.workThread = new Thread(new Runnable() {
       @Override
       public void run() {
@@ -223,7 +226,8 @@ public class FunctionLocalizer implements GenericUDFBridge.UdfWhitelistChecker {
     recentlyLocalizedJars.clear();
     ClassLoader updatedCl = null;
     try {
-      updatedCl = Utilities.addToClassPath(executorClassloader, jars);
+      AddToClassPathAction addAction = new AddToClassPathAction(executorClassloader, Arrays.asList(jars));
+      updatedCl = AccessController.doPrivileged(addAction);
       if (LOG.isInfoEnabled()) {
         LOG.info("Added " + jars.length + " jars to classpath");
       }

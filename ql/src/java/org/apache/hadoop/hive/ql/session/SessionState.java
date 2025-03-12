@@ -17,34 +17,10 @@
  */
 
 package org.apache.hadoop.hive.ql.session;
-import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_DATABASE_NAME;
 
-import java.io.Closeable;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PrintStream;
-import java.lang.management.ManagementFactory;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URLClassLoader;
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReentrantLock;
-
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Maps;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -68,6 +44,7 @@ import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.cache.CachedStore;
 import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
 import org.apache.hadoop.hive.ql.MapRedStats;
+import org.apache.hadoop.hive.ql.exec.AddToClassPathAction;
 import org.apache.hadoop.hive.ql.exec.FunctionInfo;
 import org.apache.hadoop.hive.ql.exec.Registry;
 import org.apache.hadoop.hive.ql.exec.Utilities;
@@ -103,9 +80,34 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.Maps;
+import java.io.Closeable;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintStream;
+import java.lang.management.ManagementFactory;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.security.AccessController;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
+
+import static org.apache.hadoop.hive.metastore.Warehouse.DEFAULT_DATABASE_NAME;
 
 /**
  * SessionState encapsulates common data associated with a session.
@@ -410,7 +412,9 @@ public class SessionState {
     // classloader as parent can pollute the session. See HIVE-11878
     parentLoader = SessionState.class.getClassLoader();
     // Make sure that each session has its own UDFClassloader. For details see {@link UDFClassLoader}
-    final ClassLoader currentLoader = Utilities.createUDFClassLoader((URLClassLoader) parentLoader, new String[]{});
+    AddToClassPathAction addAction = new AddToClassPathAction(
+            parentLoader, Collections.emptyList(), true);
+    final ClassLoader currentLoader = AccessController.doPrivileged(addAction);
     this.sessionConf.setClassLoader(currentLoader);
     resourceDownloader = new ResourceDownloader(conf,
         HiveConf.getVar(conf, ConfVars.DOWNLOADED_RESOURCES_DIR));
@@ -1301,6 +1305,21 @@ public class SessionState {
     }
   }
 
+  static void registerJars(List<String> newJars) throws IllegalArgumentException {
+    LogHelper console = getConsole();
+    try {
+      AddToClassPathAction addAction = new AddToClassPathAction(
+              Thread.currentThread().getContextClassLoader(), newJars);
+      final ClassLoader newLoader = AccessController.doPrivileged(addAction);
+      Thread.currentThread().setContextClassLoader(newLoader);
+      SessionState.get().getConf().setClassLoader(newLoader);
+      console.printInfo("Added " + newJars + " to class path");
+    } catch (Exception e) {
+      String message = "Unable to register " + newJars;
+      throw new IllegalArgumentException(message, e);
+    }
+  }
+
   /**
    * Load the jars under the path specified in hive.aux.jars.path property. Add
    * the jars to the classpath so the local task can refer to them.
@@ -1312,10 +1331,10 @@ public class SessionState {
       return;
     }
 
-    URLClassLoader currentCLoader =
-        (URLClassLoader) SessionState.get().getConf().getClassLoader();
-    currentCLoader =
-        (URLClassLoader) Utilities.addToClassPath(currentCLoader, jarPaths);
+    AddToClassPathAction addAction = new AddToClassPathAction(
+            SessionState.get().getConf().getClassLoader(), Arrays.asList(jarPaths)
+    );
+    final ClassLoader currentCLoader = AccessController.doPrivileged(addAction);
     sessionConf.setClassLoader(currentCLoader);
     Thread.currentThread().setContextClassLoader(currentCLoader);
   }
@@ -1346,30 +1365,14 @@ public class SessionState {
     }
 
     if (reloadedAuxJars != null && !reloadedAuxJars.isEmpty()) {
-      URLClassLoader currentCLoader =
-          (URLClassLoader) SessionState.get().getConf().getClassLoader();
-      currentCLoader =
-          (URLClassLoader) Utilities.addToClassPath(currentCLoader,
-              reloadedAuxJars.toArray(new String[0]));
+      AddToClassPathAction addAction = new AddToClassPathAction(
+              SessionState.get().getConf().getClassLoader(), reloadedAuxJars);
+      final ClassLoader currentCLoader = AccessController.doPrivileged(addAction);
       sessionConf.setClassLoader(currentCLoader);
       Thread.currentThread().setContextClassLoader(currentCLoader);
     }
     preReloadableAuxJars.clear();
     preReloadableAuxJars.addAll(reloadedAuxJars);
-  }
-
-  static void registerJars(List<String> newJars) throws IllegalArgumentException {
-    LogHelper console = getConsole();
-    try {
-      ClassLoader loader = Thread.currentThread().getContextClassLoader();
-      ClassLoader newLoader = Utilities.addToClassPath(loader, newJars.toArray(new String[0]));
-      Thread.currentThread().setContextClassLoader(newLoader);
-      SessionState.get().getConf().setClassLoader(newLoader);
-      console.printInfo("Added " + newJars + " to class path");
-    } catch (Exception e) {
-      String message = "Unable to register " + newJars;
-      throw new IllegalArgumentException(message, e);
-    }
   }
 
   static boolean unregisterJar(List<String> jarsToUnregister) {
