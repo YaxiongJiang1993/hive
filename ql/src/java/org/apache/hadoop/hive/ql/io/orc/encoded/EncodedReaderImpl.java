@@ -19,6 +19,7 @@ package org.apache.hadoop.hive.ql.io.orc.encoded;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.ref.Cleaner;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -69,7 +70,6 @@ import org.apache.orc.OrcProto;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.CodedInputStream;
 
-import sun.misc.Cleaner;
 
 
 /**
@@ -1654,9 +1654,11 @@ class EncodedReaderImpl implements EncodedReader {
     Field localCf = cleanerField;
     if (!bb.isDirect() || localCf == null) return;
     try {
-      Cleaner cleaner = (Cleaner) localCf.get(bb);
-      if (cleaner != null) {
-        cleaner.clean();
+//      Cleaner cleaner = (Cleaner) localCf.get(bb);
+      // 假设 localCf.get(bb) 是从某个地方获取 Cleaner 对象
+      Cleaner.Cleanable cleanable = (Cleaner.Cleanable) localCf.get(bb);
+      if (cleanable != null) {
+        cleanable.clean();
       } else {
         LOG.debug("Unable to clean a buffer using cleaner - no cleaner");
       }
