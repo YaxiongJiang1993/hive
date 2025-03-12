@@ -246,7 +246,6 @@
               <encoding>${project.build.sourceEncoding}</encoding>
               <verbose>false</verbose>
               <show>public</show>
-              <doclet>com.sun.jersey.wadl.resourcedoc.ResourceDoclet</doclet> <!-- 或替换为新的 doclet -->
               <additionalparam>-output ${project.build.outputDirectory}/apidocs</additionalparam>
             </configuration>
           </execution>
